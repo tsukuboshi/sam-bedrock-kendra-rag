@@ -1,0 +1,301 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Lambda, Kendra and S3
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Parameters:
+          - SysName
+          - Env
+          - KendraEdition
+          - KendraLogRetentionDays
+          - KendraDSBucketPrefix
+
+Parameters:
+  SysName:
+    Type: String
+    Default: 'cm'
+    Description: 'System name for this stack.'
+  Env:
+    Type: String
+    Default: 'prd'
+    Description: 'Environment for this stack.'
+    AllowedValues:
+      - 'prd'
+      - 'stg'
+      - 'dev'
+  BedrockModelID:
+    Type: String
+    Default: 'anthropic.claude-instant-v1'
+    Description: 'Model ID for Bedrock'
+    AllowedValues:
+      - 'anthropic.claude-instant-v1'
+      - 'anthropic.claude-v2'
+  KendraEdition:
+    Type: String
+    Default: 'DEVELOPER_EDITION'
+    Description: 'ENTERPRISE_EDITION is suitable for production environments. DEVELOPER_EDITION is suitable for development environments.'
+    AllowedValues:
+      - 'ENTERPRISE_EDITION'
+      - 'DEVELOPER_EDITION'
+  KendraLogRetentionDays:
+    Type: Number
+    Default: 365
+    Description: 'Retention days for Kendra logs.'
+    AllowedValues:
+      - 1
+      - 3
+      - 5
+      - 7
+      - 14
+      - 30
+      - 60
+      - 90
+      - 120
+      - 150
+      - 180
+      - 365
+      - 400
+      - 545
+      - 731
+      - 1096
+      - 1827
+      - 2192
+      - 2557
+      - 2922
+      - 3288
+      - 3653
+  KendraDSBucketPrefix:
+    Type: String
+    Default: 'awsdoc'
+    Description: 'Bucket prefix for search range.'
+
+Resources:
+  ##Role for Rag Function
+  RagFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Resource: '*'
+                Action: 'bedrock:*'
+              - Effect: Allow
+                Resource: !Sub
+                  - 'arn:aws:kendra:${AWS::Region}:${AWS::AccountId}:index/${IndexId}'
+                  -  IndexId: !GetAtt KendraIndex.Id
+                Action: 'kendra:Query'
+          PolicyName: !Sub '${SysName}-${Env}-rag-function-policy'
+      RoleName: !Sub '${SysName}-${Env}-rag-function-role'
+
+
+  ##Rag Function
+  RagFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: function/
+      Environment:
+        Variables:
+          KENDRA_INDEX_ID: !GetAtt KendraIndex.Id
+          BEDROCK_MODEL_ID: !Ref BedrockModelID
+      FunctionName: !Sub '${SysName}-${Env}-rag-function'
+      Handler: index.lambda_handler
+      Role: !GetAtt RagFunctionRole.Arn
+      Runtime: python3.11
+      Timeout: 900
+      Layers:
+        - !Ref Boto3Layer
+
+  ##Boto3 Layer
+  Boto3Layer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub '${SysName}-${Env}-boto3'
+      ContentUri: layer/
+      CompatibleRuntimes:
+        - python3.11
+    Metadata:
+      BuildMethod: python3.11
+
+  ##CloudWatch LogGroup for Rag Function
+  RagFunctionLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub
+        - '/aws/lambda/${FunctionName}'
+        -  FunctionName: !Ref RagFunction
+      RetentionInDays: !Ref KendraLogRetentionDays
+
+  ##Role for Kendra Index
+  KendraIndexRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: kendra.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'cloudwatch:namespace': 'Kendra'
+                Action:
+                  - 'cloudwatch:PutMetricData'
+              - Effect: Allow
+                Resource: '*'
+                Action: 'logs:DescribeLogGroups'
+              - Effect: Allow
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/kendra/*'
+                Action: 'logs:CreateLogGroup'
+              - Effect: Allow
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/kendra/*:log-stream:*'
+                Action:
+                  - 'logs:DescribeLogStreams'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+          PolicyName: !Sub '${SysName}-${Env}-kendra-index-policy'
+      RoleName: !Sub '${SysName}-${Env}-kendra-index-role'
+
+  ##Kendra Index
+  KendraIndex:
+    Type: 'AWS::Kendra::Index'
+    Properties:
+      Name: !Sub '${SysName}-${Env}-kendra-index'
+      Edition: !Ref KendraEdition
+      RoleArn: !GetAtt KendraIndexRole.Arn
+
+  ##CloudWatch LogGroup for Kendra Index
+  KendraIndexLogs:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Sub
+        - '/aws/kendra/${IndexId}'
+        -  IndexId: !GetAtt KendraIndex.Id
+      RetentionInDays: !Ref KendraLogRetentionDays
+
+  ##Role for Kendra Data Source
+  KendraDSRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: kendra.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Resource:
+                  - !Join
+                    - ''
+                    - - 'arn:aws:s3:::'
+                      - !Ref KendraDSBucket
+                      - '/*'
+                Action:
+                  - 's3:GetObject'
+              - Effect: Allow
+                Resource: !GetAtt KendraDSBucket.Arn
+                Action:
+                  - 's3:ListBucket'
+              - Effect: Allow
+                Resource: !Sub
+                  - 'arn:aws:kendra:${AWS::Region}:${AWS::AccountId}:index/${IndexId}'
+                  -  IndexId: !GetAtt KendraIndex.Id
+                Action:
+                  - 'kendra:BatchPutDocument'
+                  - 'kendra:BatchDeleteDocument'
+          PolicyName: !Sub '${SysName}-${Env}-kendra-ds-policy'
+      RoleName: !Sub '${SysName}-${Env}-kendra-ds-role'
+
+  ##Kendra Data Source
+  KendraDS:
+    Type: 'AWS::Kendra::DataSource'
+    Properties:
+      DataSourceConfiguration:
+        S3Configuration:
+          BucketName: !Ref KendraDSBucket
+          InclusionPrefixes:
+            - !Ref KendraDSBucketPrefix
+      IndexId: !GetAtt KendraIndex.Id
+      LanguageCode: 'ja'
+      Name: !Sub '${SysName}-${Env}-kendra-ds'
+      RoleArn: !GetAtt KendraDSRole.Arn
+      Type: 'S3'
+
+  ##Data Source Bucket
+  KendraDSBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub '${SysName}-${Env}-kendra-ds-bucket-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: false
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      VersioningConfiguration:
+        Status: Enabled
+
+  ##Data Source Bucket Policy
+  KendraDSBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref KendraDSBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Deny
+            Action:
+              - 's3:GetObject'
+            Resource:
+              - !Join
+                - ''
+                - - 'arn:aws:s3:::'
+                  - !Ref KendraDSBucket
+                  - '/*'
+            Principal: '*'
+            Condition:
+                StringNotEquals:
+                  aws:PrincipalArn:
+                    - !GetAtt KendraDSRole.Arn
+
+Outputs:
+  RagFunctionName:
+    Value: !Ref RagFunction
+  KendraIndexID:
+    Value: !GetAtt KendraIndex.Id
+  KendraDSID:
+    Value: !GetAtt KendraDS.Id
+  KendraDSBucketName:
+    Value: !Ref KendraDSBucket
