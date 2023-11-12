@@ -48,3 +48,5 @@ sam deploy
 |LogRetentionDays|365|(CloudWatch Logsで指定可能な保持期間日数)|LambdaとKendraにおけるCloudWatch Logsの保持日数|
 
 ## 参考文献
+
+[Bedrock、Lambda、Kendra、S3を使用したRAGをSAMで実装してみた \| DevelopersIO](https://dev.classmethod.jp/articles/rag-lambda-kendra-s3-sam/)
