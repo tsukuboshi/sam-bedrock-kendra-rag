@@ -10,13 +10,20 @@ RAGのサンプルシステムをAWS Lambda、Amazon Bedrock、Amazon Kendra、A
 
 ## デプロイ手順
 
-1. 以下コマンドで、SAMアプリをビルド
+1. 以下コマンドでリポジトリをクローンし、ディレクトリを移動
+
+```bash
+git clone https://github.com/tsukuboshi/rag-with-bedrock
+cd rag-with-bedrock
+```
+
+2. 以下コマンドで、SAMアプリをビルド
 
 ```bash
 sam build
 ```
 
-2. 以下コマンドで、SAMアプリをデプロイ
+3. 以下コマンドで、SAMアプリをデプロイ
 
 ```bash
 sam deploy 
