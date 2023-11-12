@@ -1,16 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Lambda, Kendra and S3
-
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Parameters:
-          - SysName
-          - Env
-          - KendraEdition
-          - KendraLogRetentionDays
-          - KendraDSBucketPrefix
+Description: Lambda, Kendra and S3 for RAG
 
 Parameters:
   SysName:
@@ -34,12 +24,16 @@ Parameters:
       - 'anthropic.claude-v2'
   KendraEdition:
     Type: String
-    Default: 'DEVELOPER_EDITION'
+    Default: 'ENTERPRISE_EDITION'
     Description: 'ENTERPRISE_EDITION is suitable for production environments. DEVELOPER_EDITION is suitable for development environments.'
     AllowedValues:
       - 'ENTERPRISE_EDITION'
       - 'DEVELOPER_EDITION'
-  KendraLogRetentionDays:
+  KendraDSBucketPrefix:
+    Type: String
+    Default: 'awsdoc'
+    Description: 'Bucket prefix for search range.'
+  LogRetentionDays:
     Type: Number
     Default: 365
     Description: 'Retention days for Kendra logs.'
@@ -66,10 +60,6 @@ Parameters:
       - 2922
       - 3288
       - 3653
-  KendraDSBucketPrefix:
-    Type: String
-    Default: 'awsdoc'
-    Description: 'Bucket prefix for search range.'
 
 Resources:
   ##Role for Rag Function
@@ -135,7 +125,7 @@ Resources:
       LogGroupName: !Sub
         - '/aws/lambda/${FunctionName}'
         -  FunctionName: !Ref RagFunction
-      RetentionInDays: !Ref KendraLogRetentionDays
+      RetentionInDays: !Ref LogRetentionDays
 
   ##Role for Kendra Index
   KendraIndexRole:
@@ -190,7 +180,7 @@ Resources:
       LogGroupName: !Sub
         - '/aws/kendra/${IndexId}'
         -  IndexId: !GetAtt KendraIndex.Id
-      RetentionInDays: !Ref KendraLogRetentionDays
+      RetentionInDays: !Ref LogRetentionDays
 
   ##Role for Kendra Data Source
   KendraDSRole:
