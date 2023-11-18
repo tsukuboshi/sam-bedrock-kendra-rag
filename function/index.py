@@ -4,7 +4,6 @@ import os
 import logging
 
 logger = logging.getLogger()
-logger.setLevel(logging.getLevelName(os.getenv('LOG_LEVEL', 'INFO')))
 
 kendra_client = boto3.client('kendra')
 bedrock_runtime_client = boto3.client('bedrock-runtime')
