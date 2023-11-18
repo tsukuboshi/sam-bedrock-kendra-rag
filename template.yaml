@@ -15,10 +15,10 @@ Parameters:
       - 'prd'
       - 'stg'
       - 'dev'
-  BedrockModelID:
+  BedrockModelId:
     Type: String
     Default: 'anthropic.claude-instant-v1'
-    Description: 'Model ID for Bedrock'
+    Description: 'Model id for Bedrock'
     AllowedValues:
       - 'anthropic.claude-instant-v1'
       - 'anthropic.claude-v2'
@@ -79,8 +79,8 @@ Resources:
             Version: 2012-10-17
             Statement:
               - Effect: Allow
-                Resource: '*'
-                Action: 'bedrock:*'
+                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}'
+                Action: 'bedrock:InvokeModel'
               - Effect: Allow
                 Resource: !Sub
                   - 'arn:aws:kendra:${AWS::Region}:${AWS::AccountId}:index/${IndexId}'
@@ -98,7 +98,7 @@ Resources:
       Environment:
         Variables:
           KENDRA_INDEX_ID: !GetAtt KendraIndex.Id
-          BEDROCK_MODEL_ID: !Ref BedrockModelID
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
       FunctionName: !Sub '${SysName}-${Env}-rag-function'
       Handler: index.lambda_handler
       Role: !GetAtt RagFunctionRole.Arn
@@ -106,6 +106,10 @@ Resources:
       Timeout: 900
       Layers:
         - !Ref Boto3Layer
+      LoggingConfig:
+        LogFormat: JSON
+        ApplicationLogLevel: INFO
+        SystemLogLevel: INFO
 
   ##Boto3 Layer
   Boto3Layer:
