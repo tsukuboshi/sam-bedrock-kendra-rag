@@ -66,6 +66,7 @@ Resources:
   RagFunctionRole:
     Type: 'AWS::IAM::Role'
     Properties:
+      RoleName: !Sub '${SysName}-${Env}-rag-function-role'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -74,21 +75,25 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: 'sts:AssumeRole'
-      Policies:
-        - PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}'
-                Action: 'bedrock:InvokeModel'
-              - Effect: Allow
-                Resource: !Sub
-                  - 'arn:aws:kendra:${AWS::Region}:${AWS::AccountId}:index/${IndexId}'
-                  -  IndexId: !GetAtt KendraIndex.Id
-                Action: 'kendra:Query'
-          PolicyName: !Sub '${SysName}-${Env}-rag-function-policy'
-      RoleName: !Sub '${SysName}-${Env}-rag-function-role'
 
+  ##Policy for Rag Function
+  RagFunctionPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      ManagedPolicyName: !Sub '${SysName}-${Env}-rag-function-policy'
+      Roles:
+        - !Ref RagFunctionRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}'
+            Action: 'bedrock:InvokeModel'
+          - Effect: Allow
+            Resource: !Sub
+              - 'arn:aws:kendra:${AWS::Region}:${AWS::AccountId}:index/${IndexId}'
+              -  IndexId: !GetAtt KendraIndex.Id
+            Action: 'kendra:Query'
 
   ##Rag Function
   RagFunction:
@@ -135,6 +140,7 @@ Resources:
   KendraIndexRole:
     Type: 'AWS::IAM::Role'
     Properties:
+      RoleName: !Sub '${SysName}-${Env}-kendra-index-role'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -143,31 +149,36 @@ Resources:
             Principal:
               Service: kendra.amazonaws.com
             Action: 'sts:AssumeRole'
-      Policies:
-        - PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Resource: '*'
-                Condition:
-                  StringEquals:
-                    'cloudwatch:namespace': 'Kendra'
-                Action:
-                  - 'cloudwatch:PutMetricData'
-              - Effect: Allow
-                Resource: '*'
-                Action: 'logs:DescribeLogGroups'
-              - Effect: Allow
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/kendra/*'
-                Action: 'logs:CreateLogGroup'
-              - Effect: Allow
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/kendra/*:log-stream:*'
-                Action:
-                  - 'logs:DescribeLogStreams'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-          PolicyName: !Sub '${SysName}-${Env}-kendra-index-policy'
-      RoleName: !Sub '${SysName}-${Env}-kendra-index-role'
+
+  ##Policy for Kendra Index
+  KendraIndexPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      ManagedPolicyName: !Sub '${SysName}-${Env}-kendra-index-policy'
+      Roles:
+        - !Ref KendraIndexRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'cloudwatch:namespace': 'Kendra'
+            Action:
+              - 'cloudwatch:PutMetricData'
+          - Effect: Allow
+            Resource: '*'
+            Action: 'logs:DescribeLogGroups'
+          - Effect: Allow
+            Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/kendra/*'
+            Action: 'logs:CreateLogGroup'
+          - Effect: Allow
+            Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/kendra/*:log-stream:*'
+            Action:
+              - 'logs:DescribeLogStreams'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
 
   ##Kendra Index
   KendraIndex:
@@ -190,6 +201,7 @@ Resources:
   KendraDSRole:
     Type: 'AWS::IAM::Role'
     Properties:
+      RoleName: !Sub '${SysName}-${Env}-kendra-ds-role'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -198,32 +210,37 @@ Resources:
             Principal:
               Service: kendra.amazonaws.com
             Action: 'sts:AssumeRole'
-      Policies:
-        - PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Resource:
-                  - !Join
-                    - ''
-                    - - 'arn:aws:s3:::'
-                      - !Ref KendraDSBucket
-                      - '/*'
-                Action:
-                  - 's3:GetObject'
-              - Effect: Allow
-                Resource: !GetAtt KendraDSBucket.Arn
-                Action:
-                  - 's3:ListBucket'
-              - Effect: Allow
-                Resource: !Sub
-                  - 'arn:aws:kendra:${AWS::Region}:${AWS::AccountId}:index/${IndexId}'
-                  -  IndexId: !GetAtt KendraIndex.Id
-                Action:
-                  - 'kendra:BatchPutDocument'
-                  - 'kendra:BatchDeleteDocument'
-          PolicyName: !Sub '${SysName}-${Env}-kendra-ds-policy'
-      RoleName: !Sub '${SysName}-${Env}-kendra-ds-role'
+
+  ##Policy for Kendra Data Source
+  KendraDSPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      ManagedPolicyName: !Sub '${SysName}-${Env}-kendra-ds-policy'
+      Roles:
+        - !Ref KendraDSRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Resource:
+              - !Join
+                - ''
+                - - 'arn:aws:s3:::'
+                  - !Ref KendraDSBucket
+                  - '/*'
+            Action:
+              - 's3:GetObject'
+          - Effect: Allow
+            Resource: !GetAtt KendraDSBucket.Arn
+            Action:
+              - 's3:ListBucket'
+          - Effect: Allow
+            Resource: !Sub
+              - 'arn:aws:kendra:${AWS::Region}:${AWS::AccountId}:index/${IndexId}'
+              -  IndexId: !GetAtt KendraIndex.Id
+            Action:
+              - 'kendra:BatchPutDocument'
+              - 'kendra:BatchDeleteDocument'
 
   ##Kendra Data Source
   KendraDS:
