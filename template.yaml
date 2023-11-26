@@ -9,7 +9,7 @@ Parameters:
     Description: 'System name for this stack.'
   Env:
     Type: String
-    Default: 'prd'
+    Default: 'dev'
     Description: 'Environment for this stack.'
     AllowedValues:
       - 'prd'
@@ -24,7 +24,7 @@ Parameters:
       - 'anthropic.claude-v2'
   KendraEdition:
     Type: String
-    Default: 'ENTERPRISE_EDITION'
+    Default: 'DEVELOPER_EDITION'
     Description: 'ENTERPRISE_EDITION is suitable for production environments. DEVELOPER_EDITION is suitable for development environments.'
     AllowedValues:
       - 'ENTERPRISE_EDITION'
@@ -62,80 +62,6 @@ Parameters:
       - 3653
 
 Resources:
-  ##Role for Rag Function
-  RagFunctionRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      RoleName: !Sub '${SysName}-${Env}-rag-function-role'
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Sid: ''
-            Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: 'sts:AssumeRole'
-
-  ##Policy for Rag Function
-  RagFunctionPolicy:
-    Type: 'AWS::IAM::ManagedPolicy'
-    Properties:
-      ManagedPolicyName: !Sub '${SysName}-${Env}-rag-function-policy'
-      Roles:
-        - !Ref RagFunctionRole
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}'
-            Action: 'bedrock:InvokeModel'
-          - Effect: Allow
-            Resource: !Sub
-              - 'arn:aws:kendra:${AWS::Region}:${AWS::AccountId}:index/${IndexId}'
-              -  IndexId: !GetAtt KendraIndex.Id
-            Action: 'kendra:Query'
-
-  ##Rag Function
-  RagFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: function/
-      Environment:
-        Variables:
-          KENDRA_INDEX_ID: !GetAtt KendraIndex.Id
-          BEDROCK_MODEL_ID: !Ref BedrockModelId
-      FunctionName: !Sub '${SysName}-${Env}-rag-function'
-      Handler: index.lambda_handler
-      Role: !GetAtt RagFunctionRole.Arn
-      Runtime: python3.11
-      Timeout: 900
-      Layers:
-        - !Ref Boto3Layer
-      LoggingConfig:
-        LogFormat: JSON
-        ApplicationLogLevel: INFO
-        SystemLogLevel: INFO
-
-  ##Boto3 Layer
-  Boto3Layer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      LayerName: !Sub '${SysName}-${Env}-boto3'
-      ContentUri: layer/
-      CompatibleRuntimes:
-        - python3.11
-    Metadata:
-      BuildMethod: python3.11
-
-  ##CloudWatch LogGroup for Rag Function
-  RagFunctionLog:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub
-        - '/aws/lambda/${FunctionName}'
-        -  FunctionName: !Ref RagFunction
-      RetentionInDays: !Ref LogRetentionDays
-
   ##Role for Kendra Index
   KendraIndexRole:
     Type: 'AWS::IAM::Role'
@@ -164,7 +90,7 @@ Resources:
             Resource: '*'
             Condition:
               StringEquals:
-                'cloudwatch:namespace': 'Kendra'
+                'cloudwatch:namespace': 'AWS/Kendra'
             Action:
               - 'cloudwatch:PutMetricData'
           - Effect: Allow
@@ -300,6 +226,78 @@ Resources:
                 StringNotEquals:
                   aws:PrincipalArn:
                     - !GetAtt KendraDSRole.Arn
+
+  ##Role for Rag Function
+  RagFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub '${SysName}-${Env}-rag-function-role'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  ##Policy for Rag Function
+  RagFunctionPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      ManagedPolicyName: !Sub '${SysName}-${Env}-rag-function-policy'
+      Roles:
+        - !Ref RagFunctionRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}'
+            Action: 'bedrock:InvokeModel'
+          - Effect: Allow
+            Resource: !Sub
+              - 'arn:aws:kendra:${AWS::Region}:${AWS::AccountId}:index/${IndexId}'
+              -  IndexId: !GetAtt KendraIndex.Id
+            Action: 'kendra:Query'
+
+  ##Rag Function
+  RagFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: function/
+      Environment:
+        Variables:
+          KENDRA_INDEX_ID: !GetAtt KendraIndex.Id
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+      FunctionName: !Sub '${SysName}-${Env}-rag-function'
+      Handler: index.lambda_handler
+      Role: !GetAtt RagFunctionRole.Arn
+      Runtime: python3.11
+      Timeout: 900
+      Layers:
+        - !Ref Boto3Layer
+
+  ##Boto3 Layer
+  Boto3Layer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub '${SysName}-${Env}-boto3'
+      ContentUri: layer/
+      CompatibleRuntimes:
+        - python3.11
+    Metadata:
+      BuildMethod: python3.11
+
+  ##CloudWatch LogGroup for Rag Function
+  RagFunctionLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub
+        - '/aws/lambda/${FunctionName}'
+        -  FunctionName: !Ref RagFunction
+      RetentionInDays: !Ref LogRetentionDays
 
 Outputs:
   RagFunctionName:
