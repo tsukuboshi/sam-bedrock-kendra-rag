@@ -1,8 +1,8 @@
-# rag-with-bedrock
+# sam-bedrock-kendra-rag
 
 ## 概要
 
-RAGのサンプルシステムをAWS Lambda、Amazon Bedrock、Amazon Kendra、Amazon S3で実装しています。  
+RAGのサンプルシステムをAWS Lambda、Amazon Bedrock、Amazon Kendra、Amazon S3を用いて、SAMで実装しています。  
 
 ## 構成図
 
